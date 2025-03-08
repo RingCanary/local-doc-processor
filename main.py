@@ -18,28 +18,39 @@ def load_markdown(file_path):
         content = file.read()
     html = markdown.markdown(content)
     soup = BeautifulSoup(html, 'html.parser')
-    return soup.get_text()
+    # Remove header elements
+    for header in soup.find_all(['h1', 'h2', 'h3', 'h4', 'h5', 'h6']):
+        header.decompose()
+    # Extract text and remove extra lines
+    text = '\n'.join([line.strip() for line in soup.get_text().split('\n') if line.strip()])
+    return text.strip()
 
 # Function to extract questions using regex and DistilBERT
 def extract_questions(text):
-    # Use spaCy to identify potential questions
-    doc = nlp(text)
-    potential_questions = [sent.text for sent in doc.sents if sent.text.strip().endswith('?')]
-
-    # Further filter using DistilBERT
+    # Look for lines starting with "Example" followed by a number and potential text
+    example_pattern = r'Example\s+\d+\s*(.+?)(?=Solution|Example|\Z)'
+    examples = re.findall(example_pattern, text, re.DOTALL)
+    
     questions = []
-    for sentence in potential_questions:
-        inputs = tokenizer(sentence, return_tensors='pt', truncation=True, padding=True)
-        with torch.no_grad():
-            outputs = model(**inputs)
-        start_scores = outputs.start_logits
-        end_scores = outputs.end_logits
-
-        # Check if the sentence is a valid question based on scores
-        if torch.max(start_scores) > 0.5 and torch.max(end_scores) > 0.5:
-            questions.append(sentence)
-
-    return questions
+    for example in examples:
+        # Clean up the example text
+        clean_example = example.strip()
+        
+        # Extract the actual operation being performed
+        if "Add" in clean_example:
+            # Extract the numbers being added
+            numbers = re.findall(r'\$\\frac{[^}]+}{[^}]+}\$', clean_example)
+            if len(numbers) >= 2:
+                question = f"How do you add the fractions {numbers[0]} and {numbers[1]}?"
+                questions.append(question)
+    
+    # Also look for direct questions (those ending with ?)
+    direct_questions = re.findall(r'[^.!?]*\?', text)
+    questions.extend([q.strip() for q in direct_questions if q.strip()])
+    
+    # Remove duplicates while preserving order
+    seen = set()
+    return [q for q in questions if not (q in seen or seen.add(q))]
 
 # Function to save the extracted questions
 def save_questions(questions, output_file):

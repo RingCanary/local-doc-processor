@@ -1,5 +1,6 @@
-spacy>=3.6.1
+spacy>=3.7.4
 transformers>=4.33.3
 torch>=2.0.1
 markdown>=3.4.4
 beautifulsoup4>=4.12.2
+pytest>=8.3.2
